@@ -1,0 +1,48 @@
+{
+  "name": "ebusiness-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "clsx": "^1.2.1",
+    "dayjs": "^1.11.19",
+    "dompurify": "^3.3.0",
+    "draft-js": "^0.11.7",
+    "draftjs-to-html": "^0.9.1",
+    "esri-loader": "^3.7.0",
+    "framer-motion": "^12.23.24",
+    "leaflet": "^1.9.4",
+    "leaflet.heat": "^0.2.0",
+    "lucide-react": "^0.552.0",
+    "ml-logistic-regression": "^2.0.0",
+    "ml-matrix": "^6.12.1",
+    "ml-random-forest": "^2.1.0",
+    "react": "^18.3.1",
+    "react-d3-tree": "^3.6.6",
+    "react-dom": "^18.3.1",
+    "react-draft-wysiwyg": "^1.15.0",
+    "react-flow-renderer": "^10.3.17",
+    "react-hot-toast": "^2.6.0",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.30.2",
+    "recharts": "^3.4.1"
+  },
+  "devDependencies": {
+    "@types/draftjs-to-html": "^0.8.4",
+    "@types/html-to-draftjs": "^1.5.0",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "@types/react-draft-wysiwyg": "^1.13.9",
+    "@vitejs/plugin-react": "^4.0.0",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.9.3",
+    "vite": "^5.0.0"
+  }
+}
