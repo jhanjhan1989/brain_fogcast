@@ -747,6 +747,17 @@ export default function RiskCalculator() {
                     Projection
                   </button>
                   <button
+                    onClick={() => setActiveTab("bayesian")}
+                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                      activeTab === "bayesian"
+                        ? "bg-purple-600 text-white"
+                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
+                    }`}
+                  >
+                    <Sigma size={14} />
+                    Bayesian
+                  </button>
+                  <button
                     onClick={() => setActiveTab("recommendations")}
                     className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "recommendations"
@@ -1315,6 +1326,90 @@ export default function RiskCalculator() {
                         period based on current parameters. Actual risk can be influenced by lifestyle changes, medical interventions, 
                         and environmental factors not captured in this model.
                       </div>
+                    </div>
+                  )}
+                  
+                  {activeTab === "bayesian" && (
+                    <div className="space-y-4">
+                      <div className="text-sm text-gray-600 dark:text-gray-400 mb-3 font-medium">Bayesian Logistic Regression Formula</div>
+                      
+                      {result?.coefficients && (() => {
+                        const coef = result.coefficients;
+                        const intercept = coef.Intercept ?? 0;
+                        const logit =
+                          intercept +
+                          (coef["APOE ε4"] ?? 0) * apoe +
+                          (coef["PM2.5"] ?? 0) * pm25 +
+                          (coef["NO2"] ?? 0) * no2 +
+                          (coef["ASIR"] ?? 0) * asir;
+                        const probability = 1 / (1 + Math.exp(-logit));
+
+                        return (
+                          <>
+                            <div className="bg-purple-50 dark:bg-gray-700 rounded-lg p-4 mb-4 font-mono text-xs overflow-x-auto">
+                              <div className="text-center text-gray-800 dark:text-gray-200">
+                                P(Risk) = 1 / [1 + exp(-({intercept.toFixed(2)} + {(coef["APOE ε4"] ?? 0).toFixed(3)}×APOE + {(coef["PM2.5"] ?? 0).toFixed(3)}×PM2.5 + {(coef["NO2"] ?? 0).toFixed(3)}×NO2 + {(coef["ASIR"] ?? 0).toFixed(3)}×ASIR))]
+                              </div>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-100 dark:bg-gray-700">
+                                    <th className="p-2 text-left font-semibold border-b border-gray-300 dark:border-gray-600">Variable</th>
+                                    <th className="p-2 text-right font-semibold border-b border-gray-300 dark:border-gray-600">Input Value</th>
+                                    <th className="p-2 text-right font-semibold border-b border-gray-300 dark:border-gray-600">Coefficient</th>
+                                    <th className="p-2 text-right font-semibold border-b border-gray-300 dark:border-gray-600">Contribution</th>
+                                  </tr>
+                                </thead>
+
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                  <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td className="p-2 font-semibold text-purple-600 dark:text-purple-400">Intercept</td>
+                                    <td className="p-2 text-right text-gray-500">—</td>
+                                    <td className="p-2 text-right font-mono">{intercept.toFixed(4)}</td>
+                                    <td className="p-2 text-right font-mono font-semibold">{intercept.toFixed(4)}</td>
+                                  </tr>
+
+                                  {featureLabels.map((f) => {
+                                    const val =
+                                      f.label === "APOE ε4" ? apoe : f.label === "PM2.5" ? pm25 : f.label === "NO2" ? no2 : asir;
+                                    const c = (coef as any)[f.label] ?? 0;
+                                    const contrib = val * c;
+
+                                    return (
+                                      <tr key={f.label} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <td className="p-2 font-medium">{f.label}</td>
+                                        <td className="p-2 text-right font-mono">{val}</td>
+                                        <td className="p-2 text-right font-mono">{c.toFixed(4)}</td>
+                                        <td className="p-2 text-right font-mono font-semibold">{contrib.toFixed(4)}</td>
+                                      </tr>
+                                    );
+                                  })}
+
+                                  <tr className="bg-purple-100 dark:bg-purple-900 font-bold">
+                                    <td className="p-2">Total Logit</td>
+                                    <td colSpan={3} className="p-2 text-right font-mono text-base">
+                                      {logit.toFixed(4)}
+                                    </td>
+                                  </tr>
+
+                                  <tr className="bg-purple-600 text-white font-bold">
+                                    <td className="p-2">Final Probability</td>
+                                    <td colSpan={3} className="p-2 text-right text-lg">
+                                      {(probability * 100).toFixed(2)}%
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            
+                            <div className="text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-gray-700 p-3 rounded-lg mt-3">
+                              <strong>How to Read:</strong> Each variable's contribution shows how much it adds to the total logit score. The logit is then transformed through the sigmoid function (1 / [1 + e^(-logit)]) to produce the final probability percentage.
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                   
