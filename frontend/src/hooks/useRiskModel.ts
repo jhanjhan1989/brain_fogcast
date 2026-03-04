@@ -43,7 +43,8 @@ export function useRiskModel() {
         endYear?: number
     ) => {
         try {
-            const res = await fetch("http://127.0.0.1:4000/compute-risk", {
+            const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+            const res = await fetch(`${apiUrl}/compute-risk`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ apoe, pm25, no2, asir, startYear, endYear }),
