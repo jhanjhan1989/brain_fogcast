@@ -931,11 +931,10 @@ export default function LocationSelector({ onLocationSelect, selectedLocation }:
     // Fetch health facilities within 10km
     await fetchHealthFacilities(lat, lng, 10);
 
-    setLoading(false);
-
     const locationName = `Custom Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
     addMarker(lat, lng, locationName);
 
+    // Call onLocationSelect BEFORE setLoading(false) so parent can show its loader
     onLocationSelect({
       name: locationName,
       lat,
@@ -945,6 +944,8 @@ export default function LocationSelector({ onLocationSelect, selectedLocation }:
       asir: nearestCity.asir,
       aqi: airQuality.aqi,
     });
+
+    setLoading(false);
 
     // Set search query without triggering search
     setSearchQuery(`Custom: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);

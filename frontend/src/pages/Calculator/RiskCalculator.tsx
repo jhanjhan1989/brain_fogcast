@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { flushSync } from "react-dom";
 import DecisionTree from "./DecisionTree";
 import { useRiskModel } from "../../hooks/useRiskModel";
 import LocationSelector from "../../components/LocationSelector";
@@ -47,6 +48,7 @@ export default function RiskCalculator() {
   const [autoCalculate, setAutoCalculate] = useState(false);
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [showFullTree, setShowFullTree] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const featureLabels = [
     { label: "APOE ε4", icon: <Cpu size={14} /> },
@@ -58,24 +60,45 @@ export default function RiskCalculator() {
   // Auto-calculate when parameters change
   useEffect(() => {
     if (autoCalculate && apoe >= 0 && apoe <= 2) {
-      const timer = setTimeout(() => {
-        computeRisk(apoe, pm25, no2, asir, startYear, endYear);
+      const timer = setTimeout(async () => {
+        setIsLoading(true);
+        try {
+          await computeRisk(apoe, pm25, no2, asir, startYear, endYear);
+        } catch (error) {
+          console.error("Error in auto-calculate:", error);
+        } finally {
+          setIsLoading(false);
+        }
       }, 500); // Debounce for 500ms
       
       return () => clearTimeout(timer);
     }
   }, [apoe, pm25, no2, asir, startYear, endYear, autoCalculate]);
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     if (apoe < 0 || apoe > 2) {
       alert("APOE ε4 must be 0, 1, or 2");
       return;
     }
     setAutoCalculate(true);
-    computeRisk(apoe, pm25, no2, asir, startYear, endYear);
+    setIsLoading(true);
+    try {
+      await computeRisk(apoe, pm25, no2, asir, startYear, endYear);
+    } catch (error) {
+      console.error("Error calculating risk:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleLocationSelect = (location: any) => {
+  const handleLocationSelect = async (location: any) => {
+    // Force immediate loading state update
+    if (apoe >= 0 && apoe <= 2) {
+      flushSync(() => {
+        setIsLoading(true);
+      });
+    }
+    
     setSelectedLocation(location);
     if (location.pm25) setPm25(location.pm25);
     if (location.no2) setNo2(location.no2);
@@ -84,9 +107,13 @@ export default function RiskCalculator() {
     // Auto-calculate when location changes
     if (apoe >= 0 && apoe <= 2) {
       setAutoCalculate(true);
-      setTimeout(() => {
-        computeRisk(apoe, location.pm25 || pm25, location.no2 || no2, location.asir || asir, startYear, endYear);
-      }, 100);
+      try {
+        await computeRisk(apoe, location.pm25 || pm25, location.no2 || no2, location.asir || asir, startYear, endYear);
+      } catch (error) {
+        console.error("Error calculating risk:", error);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -397,12 +424,26 @@ export default function RiskCalculator() {
   // --------------------------- MAIN UI ---------------------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* Full Page Loading Overlay */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl text-center max-w-md">
+            <svg className="animate-spin h-16 w-16 text-purple-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">Calculating Risk...</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Analyzing genetic and environmental factors</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-full px-6 py-4">
-          <div className="flex items-center justify-between">
+        <div className="max-w-full px-4 md:px-6 py-3 md:py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              <h1 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                 Alzheimer's Risk Calculator
               </h1>
               <p className="text-gray-600 dark:text-gray-400 text-xs mt-1">
@@ -410,9 +451,9 @@ export default function RiskCalculator() {
               </p>
             </div>
             {selectedLocation && (
-              <div className="flex items-center gap-2 text-sm bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-2 text-xs md:text-sm bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-lg border border-purple-200 dark:border-purple-800">
                 <MapPin size={16} className="text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-xs">
+                <span className="text-gray-700 dark:text-gray-300 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] sm:max-w-xs">
                   {selectedLocation.name}
                 </span>
               </div>
@@ -421,12 +462,12 @@ export default function RiskCalculator() {
         </div>
       </div>
 
-      <div className="flex h-[calc(100vh-80px)]">
+      <div className="flex flex-col lg:flex-row min-h-[calc(100vh-80px)]">
         {/* LEFT SIDE - Map and Input Parameters */}
         <div className="flex-1 flex flex-col">
           {/* Input Parameters Bar - Redesigned with Tooltips */}
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
+          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 md:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-4">
               {/* APOE ε4 Input */}
               <div className="relative">
                 <div className="flex items-center gap-2 mb-2">
@@ -539,14 +580,14 @@ export default function RiskCalculator() {
             </div>
 
             {/* Year Range and Calculate Button */}
-            <div className="flex items-center gap-4 justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Projection Period:</label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <label className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">Projection Period:</label>
                 <input
                   type="number"
                   value={startYear}
                   onChange={(e) => setStartYear(Number(e.target.value))}
-                  className="w-24 px-3 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-purple-500 outline-none"
+                  className="w-20 sm:w-24 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-purple-500 outline-none"
                   placeholder="Start"
                 />
                 <span className="text-gray-400 font-bold">→</span>
@@ -554,24 +595,37 @@ export default function RiskCalculator() {
                   type="number"
                   value={endYear}
                   onChange={(e) => setEndYear(Number(e.target.value))}
-                  className="w-24 px-3 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-purple-500 outline-none"
+                  className="w-20 sm:w-24 px-2 sm:px-3 py-2 text-sm font-semibold rounded-lg border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-purple-500 outline-none"
                   placeholder="End"
                 />
               </div>
 
               <button
                 onClick={handleCalculate}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+                disabled={isLoading}
+                className="w-full sm:w-auto px-4 sm:px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-bold rounded-lg hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                <Sigma size={20} />
-                Calculate Risk
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Calculating...
+                  </>
+                ) : (
+                  <>
+                    <Sigma size={20} />
+                    Calculate Risk
+                  </>
+                )}
               </button>
             </div>
           </div>
 
           {/* Map Container */}
-          <div className="flex-1 p-4 overflow-hidden">
-            <div className="h-full  overflow-hidden">
+          <div className="flex-1 p-2 md:p-4 overflow-hidden min-h-[300px] md:min-h-[400px]">
+            <div className="h-full overflow-hidden rounded-lg">
               <LocationSelector
                 onLocationSelect={handleLocationSelect}
                 selectedLocation={selectedLocation}
@@ -581,9 +635,10 @@ export default function RiskCalculator() {
         </div>
 
         {/* RIGHT SIDE - Results Panel */}
-        {result && (
-          <div className="w-[800px] bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto">
-            <div className="p-6 space-y-6">
+        {(result || isLoading) && (
+          <div className="w-full lg:w-[800px] bg-white dark:bg-gray-800 border-t lg:border-t-0 lg:border-l border-gray-200 dark:border-gray-700 overflow-y-auto max-h-[600px] lg:max-h-none relative">
+            {result && (
+            <div className="p-4 md:p-6 space-y-4 md:space-y-6">
               {/* Clinical Risk Assessment - Moved to Top */}
               <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-700 dark:to-gray-800 rounded-xl p-5 border-2 border-purple-200 dark:border-purple-700">
                 <div className="text-center mb-4">
@@ -690,10 +745,10 @@ export default function RiskCalculator() {
 
               {/* Tabs for Additional Info */}
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="flex border-b border-gray-200 dark:border-gray-600">
+                <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-600 scrollbar-hide">
                   <button
                     onClick={() => setActiveTab("features")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "features"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -704,7 +759,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("brain")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "brain"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -715,7 +770,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("tree")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "tree"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -726,7 +781,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("metrics")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "metrics"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -737,7 +792,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("projection")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "projection"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -748,7 +803,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("bayesian")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "bayesian"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -759,7 +814,7 @@ export default function RiskCalculator() {
                   </button>
                   <button
                     onClick={() => setActiveTab("recommendations")}
-                    className={`flex-1 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
+                    className={`flex-shrink-0 flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium transition-all ${
                       activeTab === "recommendations"
                         ? "bg-purple-600 text-white"
                         : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600"
@@ -1623,6 +1678,7 @@ export default function RiskCalculator() {
                 View Full Decision Tree Analysis
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
