@@ -314,23 +314,15 @@ def generate_projection(apoe, pm25, no2, asir, startYear, endYear):
 def compute_risk(apoe, pm25, no2, asir, startYear=2025, endYear=2030, ensure_bayesian=True):
     X_input = [apoe, pm25, no2, asir]
 
-    # Use the exact Bayesian Logistic Regression coefficients from the paper
-    # Formula: 1/[1 + exp(-7.20 + 0.120*X1 + 0.340*X2 + 0.260*X3 + 0.520*X4)]
-    bayesian_intercept = -7.20
-    bayesian_coef = {
-        "APOE ε4": 0.120,
-        "PM2.5": 0.340,
-        "NO2": 0.260,
-        "ASIR": 0.520
-    }
-    
-    # Calculate Bayesian probability using the exact formula
-    bayesian_logit = bayesian_intercept + (apoe * bayesian_coef["APOE ε4"]) + \
-                     (pm25 * bayesian_coef["PM2.5"]) + (no2 * bayesian_coef["NO2"]) + \
-                     (asir * bayesian_coef["ASIR"])
-    bayes_prob = float(stable_sigmoid(bayesian_logit))
+    # Use trained Logistic Regression model for Bayesian prediction
+    bayes_prob = float(logreg.predict_proba([X_input])[0][1])
     bayes_class = int(bayes_prob >= 0.5)
-    bayes_std = None  # Not applicable for deterministic formula
+    bayes_std = None  # Not applicable for deterministic model
+    
+    # Calculate logit for transparency
+    coef_dict = {name: coef for name, coef in zip(feature_names, logreg.coef_[0])}
+    intercept = float(logreg.intercept_[0])
+    bayesian_logit = float(intercept + sum(coef_dict[name] * float(val) for name, val in zip(feature_names, X_input)))
 
     # Random Forest prediction for the input
     rf_prob = float(rf.predict_proba([X_input])[0][1])
@@ -344,9 +336,10 @@ def compute_risk(apoe, pm25, no2, asir, startYear=2025, endYear=2030, ensure_bay
     decision_path, tree_risk = evaluate_custom_tree(custom_tree, X_input)
     tree_data = custom_tree
 
-    # Logistic Regression coefficients and logistic probability
+    # Logistic Regression coefficients (same as Bayesian)
     coef_dict = {name: coef for name, coef in zip(feature_names, logreg.coef_[0])}
     intercept = float(logreg.intercept_[0])
+    
     # use model's predict_proba for numeric stability
     lr_prob = float(logreg.predict_proba([X_input])[0][1])
 
@@ -373,7 +366,6 @@ def compute_risk(apoe, pm25, no2, asir, startYear=2025, endYear=2030, ensure_bay
         "bayesian_logit": float(bayesian_logit),
         "bayesian_std": bayes_std,
         "bayesian_class": bayes_class,
-        "bayesian_coefficients": {"Intercept": bayesian_intercept, **bayesian_coef},
         "randomForest": rf_prob,
         "randomForest_class": rf_class,
         "featureImportance": dict(zip(feature_names, importances)),
