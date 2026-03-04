@@ -11,13 +11,6 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 
-# Bayesian libraries
-import torch
-import pyro
-import pyro.distributions as dist
-from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoDiagonalNormal
-
 # ------------------------------
 # Utility: stable sigmoid (numeric safe)
 # ------------------------------
@@ -84,76 +77,6 @@ rf = RandomForestClassifier(
     oob_score=True
 )
 rf.fit(X_train, y_train)
-
-# ------------------------------
-# PYRO (Bayesian logistic regression model)
-# ------------------------------
-guide = None
-svi = None
-pyro_device = torch.device("cpu")
-
-def bayes_logreg_model(X, y=None):
-    # X: torch.Tensor shape (N, D)
-    D = X.shape[1]
-    w = pyro.sample(
-        "weights",
-        dist.Normal(torch.zeros(D, device=pyro_device), torch.ones(D, device=pyro_device)).to_event(1),
-    )
-    b = pyro.sample("bias", dist.Normal(torch.tensor(0.0, device=pyro_device), torch.tensor(1.0, device=pyro_device)))
-    logits = (X @ w) + b
-    with pyro.plate("data", X.shape[0]):
-        pyro.sample("obs", dist.Bernoulli(logits=logits), obs=y)
-
-def init_bayesian(num_steps=500, lr=0.01, device="cpu", seed=42, run_training=False):
-    """
-    Initializes guide/optimizer/SVI. If run_training=True, runs SVI on X_train/y_train.
-    """
-    global guide, svi, pyro_device
-    pyro.set_rng_seed(seed)
-    pyro.clear_param_store()
-    pyro_device = torch.device(device)
-
-    # move tensors to device
-    X_dev = torch.tensor(X_train, dtype=torch.float32, device=pyro_device)
-    y_dev = torch.tensor(y_train, dtype=torch.float32, device=pyro_device)
-
-    # initialize AutoDiagonalNormal directly with model
-    guide = AutoDiagonalNormal(bayes_logreg_model)
-    optimizer = pyro.optim.Adam({"lr": lr})
-    svi = SVI(bayes_logreg_model, guide, optimizer, loss=Trace_ELBO())
-
-    if run_training:
-        for step in range(num_steps):
-            loss = svi.step(X_dev, y_dev)
-            # coarse progress printing
-            if step % (max(1, num_steps // 5)) == 0:
-                print(f"[SVI] step {step} loss: {loss:.4f}")
-
-    return {"guide": guide, "svi": svi}
-
-def bayesian_predict_proba(x_input, n_samples=400):
-    """
-    Returns mean and std of predictive probability for a single sample x_input.
-    Requires init_bayesian(..., run_training=True) to have been called at least once.
-    """
-    if guide is None:
-        raise RuntimeError("Bayesian guide not initialized. Call init_bayesian(run_training=True).")
-
-    # build torch tensor on pyro_device
-    x_tensor = torch.tensor(np.asarray(x_input, dtype=np.float32), dtype=torch.float32, device=pyro_device)
-    probs = []
-    # sample from the variational posterior (guide)
-    for _ in range(n_samples):
-        sample = guide()  # dict with "weights" and "bias" on pyro_device
-        w = sample["weights"].detach()
-        b = sample["bias"].detach()
-        # ensure shapes: x_tensor (D,), w (D,), b scalar
-        logit = (x_tensor @ w) + b
-        # convert to float safely
-        prob = torch.sigmoid(logit).cpu().item()
-        probs.append(prob)
-    probs = np.array(probs, dtype=np.float64)
-    return float(probs.mean()), float(probs.std())
 
 # ------------------------------
 # Custom Decision Tree based on Bayesian coefficients
@@ -468,14 +391,11 @@ def compute_risk(apoe, pm25, no2, asir, startYear=2025, endYear=2030, ensure_bay
 # Quick test when run as script
 # ------------------------------
 if __name__ == "__main__":
-    # Example inputs (replace with yours)
+    # Example inputs
     apoe = 1
     pm25 = 38
     no2 = 26
     asir = 15
-
-    # initialize + train Bayesian guide (modest steps)
-    init_bayesian(num_steps=500, lr=0.01, run_training=True)
 
     result = compute_risk(apoe, pm25, no2, asir, startYear=2025, endYear=2025, ensure_bayesian=False)
     import pprint
