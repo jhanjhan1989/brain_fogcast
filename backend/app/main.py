@@ -34,6 +34,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Health check endpoint
+@app.get("/")
+def read_root():
+    return {"status": "ok", "message": "Brain Fogcast API is running"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
 
 # Input schema
 class RiskInput(BaseModel):
